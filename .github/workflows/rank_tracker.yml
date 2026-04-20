@@ -25,3 +25,6 @@ jobs:
 
       - name: 順位チェック実行
         run: python rank_tracker_fast.py
+
+      - name: ダッシュボード更新
+        run: python create_dashboard.py
