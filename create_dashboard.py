@@ -255,10 +255,17 @@ for col_idx in [4, 6, 8, 10]:
         }
     }, 'index': 5}}),
 
+# 既存のbandingを削除してから追加
+spreadsheet_data = sh.fetch_sheet_metadata()
+for s in spreadsheet_data.get('sheets', []):
+    if s['properties']['sheetId'] == ws_id:
+        for br in s.get('bandedRanges', []):
+            requests.insert(0, {'deleteBanding': {'bandedRangeId': br['bandedRangeId']}})
+        break
+
 # 交互行の色分け（薄いグレー）
 requests.append({'addBanding': {
     'bandedRange': {
-        'bandedRangeId': 1,
         'range': {'sheetId': ws_id, 'startRowIndex': 1, 'endRowIndex': len(rows_out),
                   'startColumnIndex': 0, 'endColumnIndex': 11},
         'rowProperties': {
