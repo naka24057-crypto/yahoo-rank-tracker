@@ -3,12 +3,32 @@
 - 最新順位を商品×エリア横並びで表示
 - 前日比の変化を矢印＋色で表示
 """
-import pickle, gspread, sys, time
+import pickle, gspread, sys, time, os
 from collections import defaultdict
 sys.stdout.reconfigure(encoding='utf-8')
 
-with open(r'C:\Users\zhong\Documents\token.pickle', 'rb') as f:
-    creds = pickle.load(f)
+from google.auth.transport.requests import Request
+from google_auth_oauthlib.flow import InstalledAppFlow
+
+SCOPES = [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive",
+]
+TOKEN_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "token.pickle")
+CREDENTIALS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "client_secrets.json")
+
+creds = None
+if os.path.exists(TOKEN_FILE):
+    with open(TOKEN_FILE, "rb") as f:
+        creds = pickle.load(f)
+if not creds or not creds.valid:
+    if creds and creds.expired and creds.refresh_token:
+        creds.refresh(Request())
+    else:
+        flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_FILE, SCOPES)
+        creds = flow.run_local_server(port=0)
+    with open(TOKEN_FILE, "wb") as f:
+        pickle.dump(creds, f)
 gc = gspread.authorize(creds)
 sh = gc.open('Yahoo!キーワードトラッカー')
 
