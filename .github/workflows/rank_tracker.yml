@@ -1,0 +1,29 @@
+name: 順位チェック
+
+on:
+  schedule:
+    # 毎日 10:00 JST (= 01:00 UTC)
+    - cron: '0 1 * * *'
+  workflow_dispatch:  # GitHubの画面から手動実行も可能
+
+jobs:
+  rank-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Python セットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: ライブラリインストール
+        run: pip install -r requirements.txt
+
+      - name: Google認証トークン復元
+        run: echo "${{ secrets.GOOGLE_TOKEN }}" | base64 -d > token.pickle
+
+      - name: 順位チェック実行
+        run: python rank_tracker_fast.py
