@@ -23,6 +23,9 @@ jobs:
           GOOGLE_TOKEN: ${{ secrets.GOOGLE_TOKEN }}
         run: echo "$GOOGLE_TOKEN" | base64 -d > token.pickle
 
+      - name: 商品スキャン
+        run: python product_scraper.py
+
       - name: 順位チェック実行
         run: python rank_tracker_fast.py
 
