@@ -2,7 +2,7 @@ name: 順位チェック
 
 on:
   schedule:
-    - cron: '0 1 * * *'
+    - cron: '23 1 * * *'
   workflow_dispatch:
 
 jobs:
