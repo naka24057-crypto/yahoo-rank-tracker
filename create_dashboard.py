@@ -3,7 +3,7 @@
 - 最新順位を商品×エリア横並びで表示
 - 前日比の変化を矢印＋色で表示
 """
-import pickle, gspread, sys, time, os
+import pickle, gspread, sys, time, os, urllib.parse
 from collections import defaultdict
 sys.stdout.reconfigure(encoding='utf-8')
 
@@ -97,10 +97,15 @@ except gspread.WorksheetNotFound:
     ws_dash = sh.add_worksheet(title='ダッシュボード', rows=1000, cols=20)
     print("ダッシュボードシートを作成しました")
 
+def search_url(kw, area_code):
+    encoded = urllib.parse.quote(kw)
+    return f'=HYPERLINK("https://shopping.yahoo.co.jp/search/{encoded}/0/?first=1&tab_ex=commerce&prom=1&sort=score&area={area_code}","検索")'
+
 # ヘッダー行
 header = ['商品番号', '商品名', 'キーワード',
           '東京\n自然順位', '東京\n変化', '東京\nPR順位', '東京\nPR変化',
-          '兵庫\n自然順位', '兵庫\n変化', '兵庫\nPR順位', '兵庫\nPR変化']
+          '兵庫\n自然順位', '兵庫\n変化', '兵庫\nPR順位', '兵庫\nPR変化',
+          '東京\n検索', '兵庫\n検索']
 
 rows_out = [header]
 
@@ -123,9 +128,19 @@ for kw in kw_list:
 
         row += [today_org, org_change, today_pr, pr_change]
 
+    # 東京・兵庫の検索URL
+    row += [search_url(kw, "13"), search_url(kw, "28")]
+
     rows_out.append(row)
 
-ws_dash.update(values=rows_out, range_name='A1')
+# メインデータ書き込み（A〜K列）
+main_rows = [row[:11] for row in rows_out]
+ws_dash.update(range_name='A1', values=main_rows)
+
+# URL列（L・M列）を別途書き込み
+url_header = [['東京\n検索', '兵庫\n検索']]
+url_rows = [row[11:13] for row in rows_out[1:]]
+ws_dash.update(range_name='L1', values=url_header + url_rows, value_input_option='USER_ENTERED')
 print(f"データ書き込み完了: {len(rows_out)-1}行")
 time.sleep(2)
 
@@ -147,7 +162,7 @@ requests.append({'repeatCell': {
 }})
 
 # 列幅
-col_widths = [80, 200, 180, 75, 60, 75, 60, 75, 60, 75, 60]
+col_widths = [80, 200, 180, 75, 60, 75, 60, 75, 60, 75, 60, 55, 55]
 for i, w in enumerate(col_widths):
     requests.append({'updateDimensionProperties': {
         'range': {'sheetId': ws_id, 'dimension': 'COLUMNS', 'startIndex': i, 'endIndex': i+1},
@@ -280,6 +295,14 @@ requests.append({'repeatCell': {
     'range': {'sheetId': ws_id, 'startRowIndex': 1, 'endRowIndex': len(rows_out)},
     'cell': {'userEnteredFormat': {'verticalAlignment': 'MIDDLE'}},
     'fields': 'userEnteredFormat.verticalAlignment'
+}})
+
+# URL列（L・M）を中央揃え
+requests.append({'repeatCell': {
+    'range': {'sheetId': ws_id, 'startRowIndex': 1, 'endRowIndex': len(rows_out),
+              'startColumnIndex': 11, 'endColumnIndex': 13},
+    'cell': {'userEnteredFormat': {'horizontalAlignment': 'CENTER'}},
+    'fields': 'userEnteredFormat.horizontalAlignment'
 }})
 
 sh.batch_update({'requests': requests})

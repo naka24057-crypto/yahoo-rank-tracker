@@ -101,24 +101,50 @@ def update_product_sheet(gc, products):
         ws.append_row(["商品番号", "商品名", "キーワード1", "キーワード2", "キーワード3", "追跡", "最終確認"])
         ws.freeze(rows=1)
 
-    # 既存の商品番号一覧を取得（A列）
-    existing = ws.col_values(1)[1:]  # ヘッダー除く
+    # 既存データ取得（ヘッダー除く）
+    all_rows = ws.get_all_values()[1:]
+    # item_no → (row_index, 商品名, キーワード1, キーワード2, キーワード3, 追跡, 最終確認)
+    existing = {}
+    for i, row in enumerate(all_rows):
+        if len(row) < 2 or not row[0]:
+            continue
+        row_padded = row + [""] * (7 - len(row))
+        existing[row[0]] = (i + 2, row_padded[1], row_padded[2], row_padded[3], row_padded[4], row_padded[5], row_padded[6])
 
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     new_rows = []
+    update_batch = []  # バッチ更新用 [(range, values), ...]
+    added = 0
+    updated = 0
+
     for product in products:
         item_no = product["item_no"]
         name    = product["name"]
+        kw      = extract_keywords(name)
+
         if item_no in existing:
-            continue
-        kw = extract_keywords(name)
-        new_rows.append([item_no, name, kw[0], kw[1], kw[2], "Y", now])
-        print(f"  追加: [{item_no}] {name[:35]} → [{kw[0]}][{kw[1]}][{kw[2]}]")
+            row_idx, old_name, old_kw1, old_kw2, old_kw3, track, _ = existing[item_no]
+            # 商品名 or キーワードが変わっていたら更新
+            if name != old_name or kw[0] != old_kw1 or kw[1] != old_kw2 or kw[2] != old_kw3:
+                # 追跡列(F)は保持、最終確認(G)を今の時刻に更新
+                update_batch.append({
+                    'range': f'A{row_idx}:G{row_idx}',
+                    'values': [[item_no, name, kw[0], kw[1], kw[2], track or "Y", now]]
+                })
+                updated += 1
+                print(f"  更新: [{item_no}] {name[:35]}")
+        else:
+            new_rows.append([item_no, name, kw[0], kw[1], kw[2], "Y", now])
+            added += 1
+            print(f"  追加: [{item_no}] {name[:35]} → [{kw[0]}][{kw[1]}][{kw[2]}]")
 
     if new_rows:
         ws.append_rows(new_rows)
+    if update_batch:
+        ws.batch_update(update_batch)
 
-    return sh.url, len(new_rows)
+    print(f"\n新規追加: {added}件 / 更新: {updated}件")
+    return sh.url, added, updated
 
 
 def main():
@@ -132,9 +158,8 @@ def main():
     print(f"取得完了: {len(products)}商品")
 
     print("スプレッドシート更新中...")
-    url, added = update_product_sheet(gc, products)
+    url, added, updated = update_product_sheet(gc, products)
 
-    print(f"\n新規追加: {added}件")
     print(f"URL: {url}")
     print("=== 完了 ===")
 
