@@ -12,6 +12,8 @@ import gspread
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
 
+from gs_retry import gs_retry
+
 APP_ID    = "dj00aiZpPWpqYk9CZmxDdDMxWCZzPWNvbnN1bWVyc2VjcmV0Jng9OTQ-"
 SELLER_ID = "nakazi-shop"
 
@@ -90,19 +92,19 @@ def extract_keywords(name, n=3):
 def update_product_sheet(gc, products):
     """スプレッドシートの商品キーワードリストを差分更新"""
     try:
-        sh = gc.open(SHEET_NAME)
+        sh = gs_retry(gc.open, SHEET_NAME)
     except gspread.SpreadsheetNotFound:
         sh = gc.create(SHEET_NAME)
 
     try:
-        ws = sh.worksheet(PRODUCT_SHEET)
+        ws = gs_retry(sh.worksheet, PRODUCT_SHEET)
     except gspread.WorksheetNotFound:
         ws = sh.add_worksheet(title=PRODUCT_SHEET, rows=1000, cols=10)
         ws.append_row(["商品番号", "商品名", "キーワード1", "キーワード2", "キーワード3", "追跡", "最終確認"])
         ws.freeze(rows=1)
 
     # 既存データ取得（ヘッダー除く）
-    all_rows = ws.get_all_values()[1:]
+    all_rows = gs_retry(ws.get_all_values)[1:]
     # item_no → (row_index, 商品名, キーワード1, キーワード2, キーワード3, 追跡, 最終確認)
     existing = {}
     for i, row in enumerate(all_rows):
@@ -139,9 +141,9 @@ def update_product_sheet(gc, products):
             print(f"  追加: [{item_no}] {name[:35]} → [{kw[0]}][{kw[1]}][{kw[2]}]")
 
     if new_rows:
-        ws.append_rows(new_rows)
+        gs_retry(ws.append_rows, new_rows)
     if update_batch:
-        ws.batch_update(update_batch)
+        gs_retry(ws.batch_update, update_batch)
 
     print(f"\n新規追加: {added}件 / 更新: {updated}件")
     return sh.url, added, updated

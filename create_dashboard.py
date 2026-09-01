@@ -10,6 +10,8 @@ sys.stdout.reconfigure(encoding='utf-8')
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
 
+from gs_retry import gs_retry
+
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive",
@@ -30,11 +32,11 @@ if not creds or not creds.valid:
     with open(TOKEN_FILE, "wb") as f:
         pickle.dump(creds, f)
 gc = gspread.authorize(creds)
-sh = gc.open('Yahoo!キーワードトラッカー')
+sh = gs_retry(gc.open, 'Yahoo!キーワードトラッカー')
 
 # --- データ読み込み ---
-ws_rank = sh.worksheet('検索順位')
-all_rows = ws_rank.get_all_values()[1:]  # ヘッダー除く
+ws_rank = gs_retry(sh.worksheet, '検索順位')
+all_rows = gs_retry(ws_rank.get_all_values)[1:]  # ヘッダー除く
 print(f"総データ数: {len(all_rows)}件")
 
 # 日付一覧（新しい順）
@@ -90,7 +92,7 @@ def change_str(today_val, prev_val):
 
 # --- ダッシュボードシート作成 ---
 try:
-    ws_dash = sh.worksheet('ダッシュボード')
+    ws_dash = gs_retry(sh.worksheet, 'ダッシュボード')
     ws_dash.clear()
     print("ダッシュボードシートをクリアしました")
 except gspread.WorksheetNotFound:
@@ -135,12 +137,12 @@ for kw in kw_list:
 
 # メインデータ書き込み（A〜K列）
 main_rows = [row[:11] for row in rows_out]
-ws_dash.update(range_name='A1', values=main_rows)
+gs_retry(ws_dash.update, range_name='A1', values=main_rows)
 
 # URL列（L・M列）を別途書き込み
 url_header = [['東京\n検索', '兵庫\n検索']]
 url_rows = [row[11:13] for row in rows_out[1:]]
-ws_dash.update(range_name='L1', values=url_header + url_rows, value_input_option='USER_ENTERED')
+gs_retry(ws_dash.update, range_name='L1', values=url_header + url_rows, value_input_option='USER_ENTERED')
 print(f"データ書き込み完了: {len(rows_out)-1}行")
 time.sleep(2)
 
@@ -305,6 +307,6 @@ requests.append({'repeatCell': {
     'fields': 'userEnteredFormat.horizontalAlignment'
 }})
 
-sh.batch_update({'requests': requests})
+gs_retry(sh.batch_update, {'requests': requests})
 print("書式設定完了")
 print(f"\nダッシュボード: {sh.url}")

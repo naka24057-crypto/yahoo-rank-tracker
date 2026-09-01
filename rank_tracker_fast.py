@@ -12,6 +12,8 @@ import urllib.parse
 from datetime import datetime
 
 import gspread
+
+from gs_retry import gs_retry
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
 
@@ -56,9 +58,9 @@ def get_google_client():
 
 
 def load_keywords(gc):
-    sh = gc.open(SHEET_NAME)
-    ws = sh.worksheet(PRODUCT_SHEET)
-    rows = ws.get_all_values()[1:]
+    sh = gs_retry(gc.open, SHEET_NAME)
+    ws = gs_retry(sh.worksheet, PRODUCT_SHEET)
+    rows = gs_retry(ws.get_all_values)[1:]
     seen = set()
     keywords = []
     for row in rows:
@@ -77,12 +79,12 @@ def load_keywords(gc):
 
 def get_or_create_rank_sheet(gc):
     try:
-        sh = gc.open(SHEET_NAME)
+        sh = gs_retry(gc.open, SHEET_NAME)
     except gspread.SpreadsheetNotFound:
         sh = gc.create(SHEET_NAME)
 
     try:
-        ws = sh.worksheet(RANK_SHEET_TITLE)
+        ws = gs_retry(sh.worksheet, RANK_SHEET_TITLE)
     except gspread.WorksheetNotFound:
         ws = sh.add_worksheet(title=RANK_SHEET_TITLE, rows=10000, cols=10)
         ws.append_row(["日付", "商品番号", "商品名", "エリア", "キーワード", "自然順位", "PR順位"])
@@ -181,7 +183,7 @@ def main():
     session.headers.update(HEADERS)
 
     today = datetime.now().strftime("%Y-%m-%d")
-    all_rows = ws.get_all_values()[1:]
+    all_rows = gs_retry(ws.get_all_values)[1:]
     done = {(r[3], r[4]) for r in all_rows if len(r) >= 5 and r[0] == today}
 
     try:
@@ -198,7 +200,7 @@ def main():
                 pr_str  = f"{pr}"      if pr      else "圏外"
                 print(f"    自然: {org_str} / PR: {pr_str} → 書き込み中")
 
-                ws.append_row([today, item_no, product_name, area_name, kw, org_str, pr_str])
+                gs_retry(ws.append_row, [today, item_no, product_name, area_name, kw, org_str, pr_str])
                 time.sleep(1.5)
     except KeyboardInterrupt:
         print("\n停止されました（次回は続きから再開されます）")
